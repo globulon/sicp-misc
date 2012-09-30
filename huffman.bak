@@ -1,0 +1,11 @@
+#lang racket
+(define (make-leaf symbol weight)
+  (list 'leaf symbole weight))
+
+(define (leaf? node)
+  (eq? 'leaf (car node)))
+
+(define (symbol-leaf node) (car node))
+  
+(define (symbol-weight node) (cadr node))
+  
