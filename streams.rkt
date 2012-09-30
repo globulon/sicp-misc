@@ -268,17 +268,24 @@
                 (stream-cdr t))
     (pairs (stream-cdr s) (stream-cdr t)))))
 
-(define (interleave-all . streams)
-  (define (assemble remaining rest)
-    (if (empty? remaining)
-        rest
-        (cons-stream (car remaining) rest)))
-  (let ((set (filter (lambda (s) (not (empty-stream? s))) 
-                         streams)))
-    (let ((rset (reverse (map stream-car set))))
-      (assemble (cdr rset) 
-                (cons-stream (car rset) 
-                             (map stream-cdr set))))))
+(define (interleave-all s1 s2 s3)
+  (cond ((empty-stream? s1)
+         (interleave s2 s3))
+        ((empty-stream? s2)
+         (interleave s1 s3))
+        ((empty-stream? s3)
+         (interleave s1 s2))
+        (else 
+         (cons-stream 
+          (stream-car s1)
+          (cons-stream
+           (stream-car s2)
+           (cons-stream
+            (stream-car s3)
+            (interleave-all
+             (stream-cdr s1)
+             (stream-cdr s2)
+             (stream-cdr s3))))))))
 
 (define (full-pairs s t)
   (cons-stream
@@ -287,8 +294,12 @@
     (stream-map (lambda (x) 
                   (list (stream-car s) x))
                 (stream-cdr t))
-    (interleave 
-     (stream-map (lambda (x)
-                   (list x (stream-car t)))
-                 (stream-cdr s))
-     (full-pairs (stream-cdr s) (stream-cdr t))))))
+    (stream-map (lambda (x)
+                  (list x (stream-car t)))
+                (stream-cdr s))
+    (full-pairs (stream-cdr s) (stream-cdr t)))))
+
+(define (invalid-pairs s t)
+  (interleave
+   (stream-map (lambda (x) (list (stream-car s) x)) t)
+   (invalid-pairs (stream-cdr s) (stream-cdr t))))

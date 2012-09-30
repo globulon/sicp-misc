@@ -1,6 +1,0 @@
-#lang racket
-(define (scale-list from-list factor)
-  (if (null? from-list) 
-      nil
-      (cons (* factor (car from-list))
-            (scale-list (cdr from-list) factor))))
