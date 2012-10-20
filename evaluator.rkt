@@ -379,6 +379,7 @@
 (define (procedure-environment p) (cadddr p))
 
 ;;environment
+;;added optimization for ex 4-12
 (define (empty? exp) (null? exp))
 
 (define (enclosing-environment env) (cdr env))
@@ -406,54 +407,51 @@
         (else 
          (error "missing arguments -- XTEND-ENV"))))
 
-(define (lookup-variable-value var env)
+(define (make-scan callback action var)
   (define (scan vars vals)
     (cond ((empty? vars) 
-           false)
+           (callback))
           ((eq? (car vars) var) 
-           (car vals))
+           (action vals))
           (else 
            (scan (cdr vars) (cdr vals)))))
+  (lambda (frame)
+    (let ((vars (frame-variables frame))
+          (vals (frame-values frame)))
+      (scan vars vals))))
+
+(define (lookup-variable-value var env)
+  (define (make-callback e)
+    (lambda () 
+      (env-loop (enclosing-environment e))))
   (define (env-loop e)
     (if (eq? the-empty-environment e)
-        (error "variable not bound -- LOOKUP VARIABLE VALUE" var))
-          (let ((frame (first-frame e)))
-            (let ((vars (frame-variables frame))
-                  (vals (frame-values frame)))
-              (let ((result (scan vars vals)))
-                (if result
-                    result
-                    (env-loop (enclosing-environment e)))))))
-  
+        (error "variable not bound -- LOOKUP VARIABLE VALUE" var)
+        (let ((frame (first-frame e))
+              (callback (make-callback e)))
+               ((make-scan callback car var) frame))))
   (env-loop env))
 
 (define (set-variable-value! var val env)
-  (define (update vars vals)
-    (cond ((empty? vars) #f)
-          ((eq? (car vars) var)
-           (begin
-             (set-car! vals val)
-             #t))
-          (else
-           (update (cdr vars) (cdr vals)))))
+  (define (make-callback e)
+    (lambda () 
+      (env-loop (enclosing-environment e))))
+  (define (update vals)
+    (set-car! vals val))
   (define (env-loop e)
     (if (eq? the-empty-environment e)
-        (error "variable not bound -- SET VARIABLE VALUE" var)
-        (let ((frame (first-frame e)))
-          (let ((vars (frame-variables frame))
-                (vals (frame-values frame)))
-            (if (update vars vals)
-                'done
-                (env-loop (enclosing-environment env)))))))
+        (error "variable not bound -- LOOKUP VARIABLE VALUE" var)
+        (let ((frame (first-frame e))
+              (callback (make-callback e)))
+               ((make-scan callback update var) frame))))
   (env-loop env))
 
 (define (set-definition-value! var val env)
+  (define (extend-frame frame)
+    (lambda () 
+      (add-binding-to-frame var val frame)))
+  (define (update vals)
+    (set-car! vals val))
   (let ((frame (first-frame env)))
-    (define (scan vars vals)
-      (cond ((empty? vars)
-             (add-binding-to-frame var val frame))
-            ((eq? (car vars) var)
-             (set-car! vals val))
-            (else 
-             (scan (cdr vars) (cdr vals)))))
-    (add-binding-to-frame var val frame)))
+    (let (( scan (make-scan (extend-frame frame) update var)))
+      (scan frame))))
