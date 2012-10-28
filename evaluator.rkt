@@ -1,5 +1,4 @@
 #lang planet neil/sicp
-
 ;;Ex 4-2
 ;;If one want to use application (call + 2 3)
 ;;(define (application? exp) (tagged-list? exp 'call))
@@ -12,6 +11,7 @@
         ((quoted? exp) (text-of-quotation exp))
         ((assignement? exp) (eval-assignement exp env))
         ((definition? exp) (eval-definition exp env))
+        ((undefine? exp) (eval-undefine exp env))
         ((if? exp) (eval-if exp env))
         ((lambda? exp)
          (make-procedure (lambda-parameters exp)
@@ -56,9 +56,9 @@
 (define (list-of-values exps env)
   (if (no-operands? exps)
       '()
-      (let ((first-op (eval (first-operand exps))))
-        cons first-op
-              (list-of-values (rest-operands exps) env))))
+      (let ((first-op (evaluator-eval (first-operand exps) env)))
+        (cons first-op
+              (list-of-values (rest-operands exps) env)))))
 
 (define (application? exp) (pair? exp))
 
@@ -71,9 +71,9 @@
 ;              rest)))
 
 (define (eval-if exp env)
-  (if (true? (eval (if-predicate exp) env))
-      (eval (if-consequent exp) env)
-      (eval (if-alternative exp) env)))
+  (if (true? (evaluator-eval (if-predicate exp) env))
+      (evaluator-eval (if-consequent exp) env)
+      (evaluator-eval (if-alternative exp) env)))
 
 (define (eval-sequence exps env)
   (cond ((last-exp? exps)
@@ -84,7 +84,7 @@
 
 (define (eval-assignement exp env)
   (set-variable-value! (assignement-variable exp)
-                       (eval (assignement-value exp) env)
+                       (evaluator-eval (assignement-value exp) env)
                        env)
   'ok)
 
@@ -359,11 +359,11 @@
 (define (false? x) (eq? false))
 
 (define (apply-primitive-procedure proc args)
-  ;;book supposes we have it...we re-pipe it to real apply
-  (apply proc args))
+  (apply (primitive-implementation proc) args))
 
-;;waiting for better definitions in 4.1.4
-(define (primitive-procedure? p) #t)
+(define (primitive-procedure? proc) (tagged-list? proc 'primitive))
+
+(define (primitive-implementation proc) (cadr proc))
 
 (define (make-procedure arguments body env)
   (list 'procedure arguments body env))
@@ -424,12 +424,12 @@
   
 (define (lookup-variable-value var env)
   (define (callback e)
-    (env-loop (enclosing-environment e)))
+    (env-loop callback car var (enclosing-environment e)))
   (env-loop callback car var env))
 
 (define (set-variable-value! var val env)
   (define (callback e)
-    (env-loop (enclosing-environment e)))
+    (env-loop callback car var (enclosing-environment e)))
   (define (update vals)
     (set-car! vals val))  
   (env-loop callback update var env))
@@ -440,3 +440,78 @@
   (define (update vals)
     (set-car! vals val))
   (env-loop callback update var env))
+
+(define primitive-procedures
+  (list (list 'car car)
+        (list 'cdr cdr)
+        (list 'cons cons)
+        (list '+ +)
+        (list 'null? null?)))
+
+(define (primitive-procedure-names)
+  (map car
+       primitive-procedures))
+
+(define (primitive-procedure-objects)
+  (map (lambda (proc)
+         (list 'primitive (cadr proc)))
+       primitive-procedures))
+
+(define (set-up-env)
+  (let ((initial-env (extend-environment (primitive-procedure-names)
+                                         (primitive-procedure-objects)
+                                         the-empty-environment)))
+    (set-definition-value! 'true  true initial-env)
+    (set-definition-value! 'false false initial-env)
+    initial-env))
+
+(define global-env (set-up-env))
+
+
+
+;;is unbind possible... Ex 4-13
+
+(define (undefine? exp) (tagged-list? exp 'undefine))
+
+(define (eval-undefine exp env)
+  (unset-definition-value! (definition-variable exp) env))
+
+(define (unset-definition-value! var env)
+  (define (unbind vars vals)
+    (cond ((null? vars) 
+           '())
+          ((eq? (car vars) var)
+           (let ((val (car vals)))
+             (set-car! vars '())
+             (set-car! vals '())
+             val))
+          (else
+           (unbind (cdr vars) (cdr vals)))))
+      (let ((frame (first-frame env)))
+        (let ((vars (frame-variables frame))
+              (vals (frame-values frame)))
+        (unbind vars vals))))
+
+(define input-prompt ";; M-eval input:")
+(define output-prompt ";; M-eval output:")
+
+(define (driver-loop)
+  (print input-prompt)
+  (let ((input (read)))
+    ;(print global-env)
+    (let ((evaluated (evaluator-eval input global-env)))
+      (user-print evaluated)
+      (driver-loop))))
+
+(define (print string)
+  (newline)
+  (display string)
+  (newline))
+  
+(define (user-print object)
+  (if (compound-procedure? object)
+      (display (list 'compound-procedure
+                     (procedure-parameters object)
+                     (procedure-body object)
+                     '<procedure-env>))
+      (display object)))
