@@ -22,10 +22,7 @@
         ((let*? exp)
          (evaluator-eval (let*->nested-lets exp) env))
         ((begin? exp)
-         (display "begin")
-         (newline)
-         (display exp)
-         (eval-sequence (begin-actions exp) env))
+         (eval-sequence (begin-actions exp)env))
         ((cond? exp) (evaluator-eval (cond->if exp) env))
 ;ex 4-3        
         ((and? exp) (evaluator-eval (and->if exp) env))
@@ -36,24 +33,70 @@
 ;        ((or? exp)
 ;         (eval-or exp (logical-operands exp) env))
         ((application? exp)
-         (evaluator-apply (evaluator-eval (operator exp) env)
-                          (list-of-values (operands exp) env)))
+         (evaluator-apply (actual-value (operator exp) env)
+                          (operands exp)
+                          env))
         (else 
          (error "Unknown expression type -- EVAL" exp))))
 
-(define (evaluator-apply procedure arguments)
+(define (actual-value exp env)
+  (force-it (evaluator-eval exp env)))
+
+(define (delay-it exp env)
+  (list 'thunk exp env))
+
+(define (thunk? obj)
+  (tagged-list? obj 'thunk))
+
+(define (thunk-exp obj)
+  (cadr obj))
+
+(define (thunk-env obj)
+  (caddr obj))
+
+(define (evaluated-thunk? obj)
+  (tagged-list? obj 'evaluated-thunk))
+
+(define (thunk-value evaluated-thunk)
+  (cadr evaluated-thunk))
+
+(define (force-it obj)
+  (cond ((thunk? obj)
+         (let ((result (actual-value (thunk-exp obj) 
+                                     (thunk-env obj))))
+           (set-car! obj 'evaluated-thunk )
+           (set-car! (cdr obj) result)
+           (set-cdr! (cdr obj) '())
+           result))
+        ((evaluated-thunk? obj)
+         (thunk-value obj))
+        (else obj)))
+
+(define (evaluator-apply procedure arguments env)
   (cond ((primitive-procedure? procedure)
-        (apply-primitive-procedure procedure arguments))
+         (apply-primitive-procedure procedure 
+                                    (list-of-args-values arguments env)))
         ((compound-procedure? procedure)
          (eval-sequence
           (procedure-body procedure)
           (extend-environment
            (procedure-parameters procedure)
-           arguments
+           (list-of-delayed-args arguments env)
            (procedure-environment procedure))))
         (else
          (error "Unknown procedure type -- APPLY" procedure))))
 
+(define (list-of-args-values exps env)
+  (if (no-operands? exps)
+      '()
+      (cons (actual-value (first-operand exps) env)
+            (list-of-args-values (cdr exps) env))))
+
+(define (list-of-delayed-args exps env)
+  (if (no-operands? exps)
+      '()
+      (cons (delay-it (first-operand exps) env)
+            (list-of-delayed-args (cdr exps) env))))
 
 ;;Evaluated left to right
 (define (list-of-values exps env)
@@ -74,13 +117,11 @@
 ;              rest)))
 
 (define (eval-if exp env)
-  (if (true? (evaluator-eval (if-predicate exp) env))
+  (if (true? (actual-value (if-predicate exp) env))
       (evaluator-eval (if-consequent exp) env)
       (evaluator-eval (if-alternative exp) env)))
 
 (define (eval-sequence exps env)
-  (display exps)
-  (newline)
   (cond ((last-exp? exps)
          (evaluator-eval (first-exp exps) env))
         (else 
@@ -359,9 +400,9 @@
                                     body))
        (cons 'do-function inits))))))
 
-(define (true? x) (not (eq? false)))
+(define (true? x) (not (eq? x false)))
 
-(define (false? x) (eq? false))
+(define (false? x) (eq? x false))
 
 (define (apply-primitive-procedure proc args)
   (apply (primitive-implementation proc) args))
@@ -451,6 +492,8 @@
         (list 'cdr cdr)
         (list 'cons cons)
         (list '+ +)
+        (list '/ +)
+        (list '= =)
         (list 'null? null?)))
 
 (define (primitive-procedure-names)
@@ -504,7 +547,7 @@
   (print input-prompt)
   (let ((input (read)))
     ;(print global-env)
-    (let ((evaluated (evaluator-eval input global-env)))
+    (let ((evaluated (actual-value input global-env)))
       (user-print evaluated)
       (driver-loop))))
 
