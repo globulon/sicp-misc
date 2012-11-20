@@ -434,7 +434,7 @@
 
 (define (set-variable-value! var val env)
   (define (callback e)
-    (env-loop callback car var (enclosing-environment e)))
+    (env-loop callback update var (enclosing-environment e)))
   (define (update vals)
     (set-car! vals val))  
   (env-loop callback update var env))
