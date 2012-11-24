@@ -8,6 +8,9 @@
 (define (evaluator-eval exp env)
   (cond ((self-evaluating? exp) exp)
         ((variable? exp) (lookup-variable-value exp env))
+        ((quoted-list? exp) 
+         (let ((text (quoted->list exp)))
+           (evaluator-eval  text env)))
         ((quoted? exp) (text-of-quotation exp))
         ((assignement? exp) (eval-assignement exp env))
         ((definition? exp) (eval-definition exp env))
@@ -147,6 +150,10 @@
 
 (define (variable? exp) (symbol? exp))
 
+(define (quoted-list? exp)
+  (and (quoted? exp)
+       (pair? (cadr exp))))
+
 (define (quoted? exp)
   (tagged-list? exp 'quote))
 
@@ -246,7 +253,9 @@
 
 (define (clause-actions clause) 
   (cond ((eq? "=>" (cadr clause)) 
-         (cddr clause))))
+         (cddr clause))
+        (else 
+         (cdr clause))))
 
 (define (cond->if exp) 
   (expand-clauses (cond-clauses exp)))
@@ -277,6 +286,15 @@
 
 (define (and-terms exp) (logical-operands exp))
 
+(define (quoted->list exps)
+  (define (make-list expr)
+    (if (empty? expr)
+        (list 'quote '())
+        (list 'cons 
+              (list 'quote (car expr))
+              (make-list (cdr expr)))))
+  (make-list (cadr exps)))
+  
 ;;ex 4-3 as adding and/or conditions
 (define (evaluate-and exps env)
   (define (iter exps)
@@ -449,9 +467,9 @@
   (cond ((= (length vars) (length args))
          (cons (make-frame vars args) env))
         ((< (length vars) (length args))
-         (error "missing variable names -- XTEND-ENV"))
+         (error "missing variable names -- XTEND-ENV" vars args))
         (else 
-         (error "missing arguments -- XTEND-ENV"))))
+         (error "missing arguments -- XTEND-ENV" vars args))))
 
 (define (env-loop callback action var e)
   (define (scan vars vals)
@@ -491,6 +509,7 @@
   (list (list 'car car)
         (list 'cdr cdr)
         (list 'cons cons)
+        (list 'empty? empty?)
         (list '+ +)
         (list '/ +)
         (list '= =)
