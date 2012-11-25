@@ -12,10 +12,14 @@
          (let ((text (quoted->list exp)))
            (evaluator-eval  text env)))
         ((quoted? exp) (text-of-quotation exp))
-        ((assignement? exp) (eval-assignement exp env))
+        
         ((definition? exp) (eval-definition exp env))
         ((undefine? exp) (eval-undefine exp env))
         ((if? exp) (eval-if exp env))
+        ((list-lambda? exp)
+         (make-list-procedure (lambda-parameters exp)
+                         (lambda-body exp)
+                         env))
         ((lambda? exp)
          (make-procedure (lambda-parameters exp)
                          (lambda-body exp)
@@ -86,7 +90,7 @@
            (procedure-parameters procedure)
            (list-of-delayed-args arguments env)
            (procedure-environment procedure))))
-        (else
+        ( else
          (error "Unknown procedure type -- APPLY" procedure))))
 
 (define (list-of-args-values exps env)
@@ -190,6 +194,9 @@
 
 (define (lambda? exp)
   (tagged-list? exp 'lambda))
+
+(define (list-lambda? exp)
+  (tagged-list? exp 'list-lambda))
 
 (define (lambda-parameters exp) (cadr exp))
 
@@ -432,9 +439,13 @@
 (define (make-procedure arguments body env)
   (list 'procedure arguments body env))
 
+(define (make-list-procedure arguments body env)
+  (list 'list-procedure arguments body env))
+
 ;;procedures
 (define (compound-procedure? exp)
-  (tagged-list? exp 'procedure))
+  (or (tagged-list? exp 'procedure)
+      (tagged-list? exp 'list-procedure)))
 
 (define (procedure-parameters p) (cadr p))
 
@@ -576,8 +587,35 @@
   
 (define (user-print object)
   (if (compound-procedure? object)
-      (display (list 'compound-procedure
+      (let ((proc-type (car object)))
+        (cond ((eq? 'list-procedure proc-type)
+               (display-list object))
+               (else
+                (display-compound-procedure object))))
+      (display object)))
+        
+(define (display-list object)
+  (define (apply-operation proc list-object)
+    (eval-sequence
+     (procedure-body proc)
+     (extend-environment
+      (procedure-parameters proc)
+      (list list-object)
+      (procedure-environment proc))))
+  (let ((car-proc (actual-value 'car global-env))
+         (cdr-proc (actual-value 'cdr global-env)))
+     (define (iter list-object acc count)
+       (cond ((= 0 count)
+              (reverse (cons '... acc)))
+             ((empty? list-object)
+              (reverse acc))
+             (else (let ((first (force-it (apply-operation car-proc list-object)))
+                         (rest (force-it (apply-operation cdr-proc list-object))))
+                     (iter rest (cons first acc) (- count 1))))))
+    (display (iter object '() 3))))
+    
+(define (display-compound-procedure object)
+  (display (list (car object)
                      (procedure-parameters object)
                      (procedure-body object)
-                     '<procedure-env>))
-      (display object)))
+                     '<procedure-env>)))
