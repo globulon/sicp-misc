@@ -165,5 +165,41 @@
           (require (eq? (cadr gabby-father) (caddr parker)))
           (require (distinct? (map caddr configs)))
             configs)))))
-            
+
+;4-44
+(define (queens)
+  (define (safe-col? queen positions)
+    (let ((col (cadr queen))
+          (cols (map cadr queen)))
+      (empty? (filter (lambda (x) (= x col)) cols))))
+  (define (safe-diagonal? queen positions)
+    (let ((row (car queen)) (col (cadr queen)))
+      (empty? 
+       (filter
+        (lambda (position)
+          (= 1 (abs (/ (- row (car position))
+                       (- col (cadr position))))))
+        positions))))
+  (define (safe? queen positions)
+    (if (safe-col? queen positions)
+        (safe-diagonal? queen positions)
+        #f))
+  (let ((q1 (list 1 (amb 1 2 3 4 5 6 7 8))))
+    (let ((q2 (list 2 (amb 1 2 3 4 5 6 7 8))))
+      (require (safe? q2 (list q2)))
+      (let ((q3 (list 3 (amb 1 2 3 4 5 6 7 8))))
+        (require (safe? q3 (list q1 q2)))
+        (let ((q4 (list 4 (amb 1 2 3 4 5 6 7 8))))
+          (require (safe? q4 (list q1 q2 q3)))
+          (let ((q5 (list 5 (amb 1 2 3 4 5 6 7 8))))
+            (require (safe? q5 (list q1 q2 q3 q4)))
+            (let ((q6 (list 6 (amb 1 2 3 4 5 6 7 8))))
+              (require (safe? q6 (list q1 q2 q3 q4 q5)))
+              (let ((q7 (list 7 (amb 1 2 3 4 5 6 7 8))))
+                (require (safe? q7 (list q1 q2 q3 q4 q5 q6)))
+                (let ((q8 (list 8 (amb 1 2 3 4 5 6 7 8))))
+                  (require (safe? q8 (list q1 q2 q3 q4 q5 q6 q7)))
+                  (list q1 q2 q3 q4 q5 q6 q7 q8))))))))))
+                  
+          
     
